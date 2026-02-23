@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>百ます計算ジェネレーター</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* ===== Controls ===== */
+.controls {
+  max-width: 600px;
+  margin: 24px auto;
+  padding: 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.controls h1 {
+  font-size: 1.3rem;
+  margin-bottom: 16px;
+  text-align: center;
+}
+.control-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.control-row label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 60px;
+}
+.control-row select, .control-row button {
+  font-size: 0.9rem;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+.control-row select:focus { outline: 2px solid #4a90d9; }
+.btn-generate {
+  background: #4a90d9 !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 600;
+}
+.btn-generate:hover { background: #3a7bc8 !important; }
+.btn-print {
+  background: #e8e8e8 !important;
+  font-weight: 600;
+}
+.btn-print:hover { background: #ddd !important; }
+
+/* ===== Sheet container ===== */
+.sheet-container {
+  max-width: 800px;
+  margin: 0 auto 40px;
+  padding: 0 16px;
+}
+
+/* ===== Table ===== */
+.hyaku-sheet {
+  margin: 24px auto;
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.hyaku-sheet h2 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+.sheet-header .date-field {
+  font-size: 0.9rem;
+  color: #666;
+}
+.sheet-header .print-title {
+  display: none;
+}
+.sheet-header .mode-label {
+  font-size: 0.85rem;
+  color: #888;
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+table.hyaku {
+  border-collapse: collapse;
+  margin: 0 auto;
+}
+table.hyaku td, table.hyaku th {
+  width: 16mm;
+  height: 16mm;
+  text-align: center;
+  vertical-align: middle;
+  border: 1px solid #333;
+  font-size: 14pt;
+  font-weight: 500;
+}
+table.hyaku .op-cell {
+  background: #f0f0f0;
+  font-weight: 700;
+  font-size: 16pt;
+}
+table.hyaku .header-cell {
+  background: #e8f0fe;
+  font-weight: 700;
+}
+table.hyaku .answer-cell {
+  color: #c00;
+  font-weight: 600;
+}
+table.hyaku .empty-cell {
+  background: #fafafa;
+}
+
+/* 負の数モード: フォント少し縮小 */
+table.hyaku.negative-mode td, table.hyaku.negative-mode th {
+  font-size: 12pt;
+}
+
+/* 文字式モードの場合セルを小さくしてフォント縮小 */
+table.hyaku.expr-mode td, table.hyaku.expr-mode th {
+  width: 15mm;
+  height: 15mm;
+  font-size: 9pt;
+}
+table.hyaku.expr-mode .op-cell { font-size: 11pt; }
+table.hyaku.expr-mode .header-cell { font-size: 9pt; }
+
+/* ===== Print ===== */
+@media print {
+  body { background: #fff; }
+  .controls { display: none !important; }
+  .sheet-container { max-width: none; padding: 0; margin: 0; }
+
+  .hyaku-sheet {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 10mm 0 0 0;
+    margin: 0;
+  }
+  .hyaku-sheet.problem-sheet {
+    page-break-after: always;
+  }
+  .sheet-header .print-title {
+    display: inline;
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+  .sheet-header .mode-label {
+    font-size: 0.9rem;
+  }
+
+  table.hyaku { margin: 0 auto; }
+  table.hyaku td, table.hyaku th {
+    width: 16mm;
+    height: 16mm;
+    font-size: 14pt;
+  }
+  table.hyaku.negative-mode td, table.hyaku.negative-mode th {
+    font-size: 12pt;
+  }
+  table.hyaku.expr-mode td, table.hyaku.expr-mode th {
+    width: 15mm;
+    height: 15mm;
+    font-size: 9pt;
+  }
+  table.hyaku.expr-mode .op-cell { font-size: 11pt; }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>百ます計算ジェネレーター</h1>
+  <div class="control-row">
+    <label>モード</label>
+    <select id="mode">
+      <option value="basic">数字（基本 0〜9）</option>
+      <option value="negative">数字（負の数 -9〜9）</option>
+      <option value="expr">文字式</option>
+    </select>
+  </div>
+  <div class="control-row">
+    <label>演算</label>
+    <select id="op">
+      <option value="add">たし算（＋）</option>
+      <option value="sub">ひき算（−）</option>
+      <option value="mul">かけ算（×）</option>
+    </select>
+  </div>
+  <div class="control-row">
+    <button class="btn-generate" onclick="generate()">再生成</button>
+    <button class="btn-print" onclick="window.print()">印刷</button>
+  </div>
+</div>
+
+<div class="sheet-container">
+  <div id="problem-area"></div>
+  <div id="answer-area"></div>
+</div>
+
+<script>
+/* ===================================================================
+   百ます計算ジェネレーター
+   =================================================================== */
+
+// ----- Term: 文字式の項を表現 -----
+class Term {
+  constructor(coeff, variable = '') {
+    this.coeff = coeff;
+    this.variable = variable;
+  }
+  clone() { return new Term(this.coeff, this.variable); }
+}
+
+// ----- ユーティリティ -----
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function randInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pickN(arr, n) {
+  return shuffle(arr).slice(0, n);
+}
+
+// ----- 式の演算 -----
+function simplify(terms) {
+  const map = {};
+  for (const t of terms) {
+    const key = t.variable;
+    map[key] = (map[key] || 0) + t.coeff;
+  }
+  const result = [];
+  // 変数項を先（アルファベット順）、定数項を後
+  const keys = Object.keys(map).sort((a, b) => {
+    if (a === '' && b === '') return 0;
+    if (a === '') return 1;
+    if (b === '') return -1;
+    return a.localeCompare(b);
+  });
+  for (const k of keys) {
+    if (map[k] !== 0) {
+      result.push(new Term(map[k], k));
+    }
+  }
+  return result.length > 0 ? result : [new Term(0, '')];
+}
+
+function compute(left, right, op) {
+  // left, right は Term[]
+  if (op === 'add') {
+    return simplify([...left.map(t => t.clone()), ...right.map(t => t.clone())]);
+  }
+  if (op === 'sub') {
+    return simplify([
+      ...left.map(t => t.clone()),
+      ...right.map(t => new Term(-t.coeff, t.variable))
+    ]);
+  }
+  if (op === 'mul') {
+    // 分配法則で全組み合わせ
+    const result = [];
+    for (const l of left) {
+      for (const r of right) {
+        // 変数の結合: a * b → ab, a * '' → a, '' * a → a
+        let v;
+        if (l.variable === '' && r.variable === '') {
+          v = '';
+        } else if (l.variable === '') {
+          v = r.variable;
+        } else if (r.variable === '') {
+          v = l.variable;
+        } else {
+          // 変数同士の積: 文字式かけ算で横列は数値のみにするため、基本ここには来ない
+          // 安全策として結合
+          const vars = (l.variable + r.variable).split('').sort().join('');
+          v = vars;
+        }
+        result.push(new Term(l.coeff * r.coeff, v));
+      }
+    }
+    return simplify(result);
+  }
+}
+
+function exprToString(terms) {
+  if (terms.length === 0) return '0';
+  let s = '';
+  for (let i = 0; i < terms.length; i++) {
+    const t = terms[i];
+    const c = t.coeff;
+    const v = t.variable;
+
+    if (v === '') {
+      // 定数項
+      if (i === 0) {
+        s += String(c);
+      } else {
+        s += (c >= 0 ? '+' : '') + String(c);
+      }
+    } else {
+      // 変数項
+      if (i === 0) {
+        if (c === 1) s += v;
+        else if (c === -1) s += '-' + v;
+        else s += String(c) + v;
+      } else {
+        if (c === 1) s += '+' + v;
+        else if (c === -1) s += '-' + v;
+        else s += (c >= 0 ? '+' : '') + String(c) + v;
+      }
+    }
+  }
+  return s || '0';
+}
+
+// Term[] をパースしやすい形で作成
+function numTerm(n) { return [new Term(n, '')]; }
+function varTerm(coeff, v) {
+  if (coeff === 0) return [new Term(0, '')];
+  return [new Term(coeff, v)];
+}
+function exprTerm(coeff, v, constant) {
+  const terms = [];
+  if (coeff !== 0) terms.push(new Term(coeff, v));
+  if (constant !== 0) terms.push(new Term(constant, ''));
+  return terms.length > 0 ? terms : [new Term(0, '')];
+}
+
+// ----- 生成ロジック -----
+function generateRow(mode, op, isCol) {
+  if (mode === 'basic') {
+    return shuffle([0,1,2,3,4,5,6,7,8,9]).map(n => numTerm(n));
+  }
+
+  if (mode === 'negative') {
+    // -9〜9から正負バランスよく10個
+    const pool = [];
+    for (let i = -9; i <= 9; i++) pool.push(i);
+    // 正5個、負5個を目安に（0は正側）
+    const positives = shuffle(pool.filter(n => n >= 0));
+    const negatives = shuffle(pool.filter(n => n < 0));
+    let selected;
+    if (op === 'mul') {
+      // かけ算: -9〜9
+      selected = [...pickN(positives, 5), ...pickN(negatives, 5)];
+    } else {
+      selected = [...pickN(positives, 5), ...pickN(negatives, 5)];
+    }
+    return shuffle(selected).map(n => numTerm(n));
+  }
+
+  if (mode === 'expr') {
+    const vars = ['a', 'b'];
+    if (op === 'mul' && !isCol) {
+      // かけ算の横列（上段）は数値のみ
+      const pool = [];
+      for (let i = -5; i <= 5; i++) if (i !== 0) pool.push(i);
+      return shuffle(pickN(pool, 10)).map(n => numTerm(n));
+    }
+    // +/-: 数値と文字式を混在
+    // かけ算の縦列: 数値+文字式混在
+    const items = [];
+    // 数値項 3〜4個
+    const numCount = randInt(3, 4);
+    const numPool = [];
+    for (let i = -5; i <= 5; i++) if (i !== 0) numPool.push(i);
+    const nums = pickN(numPool, numCount);
+    for (const n of nums) items.push(numTerm(n));
+
+    // 単項式 3〜4個 (例: 2a, -3b)
+    const varTermCount = randInt(3, 4);
+    for (let i = 0; i < varTermCount; i++) {
+      const c = randInt(-5, 5) || 1;
+      const v = vars[Math.floor(Math.random() * vars.length)];
+      items.push(varTerm(c, v));
+    }
+
+    // 残りは多項式 (例: 2a+3, -b+1)
+    while (items.length < 10) {
+      const c = randInt(-3, 3) || 1;
+      const v = vars[Math.floor(Math.random() * vars.length)];
+      const k = randInt(-3, 3) || 1;
+      items.push(exprTerm(c, v, k));
+    }
+
+    return shuffle(items).slice(0, 10);
+  }
+}
+
+function generate() {
+  const mode = document.getElementById('mode').value;
+  const op = document.getElementById('op').value;
+
+  // 横列（上段）: isCol=false, 縦列（左列）: isCol=true
+  const rowItems = generateRow(mode, op, false);
+  const colItems = generateRow(mode, op, true);
+
+  // 回答マトリクス計算
+  const answers = [];
+  for (let r = 0; r < 10; r++) {
+    answers[r] = [];
+    for (let c = 0; c < 10; c++) {
+      answers[r][c] = compute(colItems[r], rowItems[c], op);
+    }
+  }
+
+  const opSymbol = op === 'add' ? '＋' : op === 'sub' ? '−' : '×';
+  const isExpr = mode === 'expr';
+
+  renderSheet('problem-area', rowItems, colItems, answers, opSymbol, false, isExpr);
+  renderSheet('answer-area', rowItems, colItems, answers, opSymbol, true, isExpr);
+}
+
+function renderSheet(containerId, rowItems, colItems, answers, opSymbol, showAnswers, isExpr) {
+  const container = document.getElementById(containerId);
+  const sheetClass = showAnswers ? 'answer-sheet' : 'problem-sheet';
+  const title = showAnswers ? '回答' : '問題';
+  const mode = document.getElementById('mode').value;
+  const op = document.getElementById('op').value;
+  const isNeg = mode === 'negative';
+  const tableClass = 'hyaku' + (isExpr ? ' expr-mode' : '') + (isNeg ? ' negative-mode' : '');
+  const modeLabels = { basic: '基本', negative: '負の数', expr: '文字式' };
+  const opLabels = { add: 'たし算', sub: 'ひき算', mul: 'かけ算' };
+  const modeLabel = modeLabels[mode] + '・' + opLabels[op];
+
+  let html = `<div class="hyaku-sheet ${sheetClass}">`;
+  html += '<div class="sheet-header">';
+  html += `<h2><span class="print-title">百ます計算　</span>${title}<span class="mode-label">（${modeLabel}）</span></h2>`;
+  if (!showAnswers) {
+    html += '<span class="date-field">　　月　　日（　　）　　分　　秒</span>';
+  }
+  html += '</div>';
+
+  html += `<table class="${tableClass}">`;
+
+  // ヘッダー行: 演算記号 + 横列の10個
+  html += '<tr>';
+  html += `<td class="op-cell">${opSymbol}</td>`;
+  for (let c = 0; c < 10; c++) {
+    html += `<td class="header-cell">${exprToString(rowItems[c])}</td>`;
+  }
+  html += '</tr>';
+
+  // データ行: 縦列ヘッダー + 回答/空欄
+  for (let r = 0; r < 10; r++) {
+    html += '<tr>';
+    html += `<td class="header-cell">${exprToString(colItems[r])}</td>`;
+    for (let c = 0; c < 10; c++) {
+      if (showAnswers) {
+        html += `<td class="answer-cell">${exprToString(answers[r][c])}</td>`;
+      } else {
+        html += '<td class="empty-cell"></td>';
+      }
+    }
+    html += '</tr>';
+  }
+
+  html += '</table></div>';
+  container.innerHTML = html;
+}
+
+// モード/演算変更時に自動再生成
+document.getElementById('mode').addEventListener('change', generate);
+document.getElementById('op').addEventListener('change', generate);
+
+// 初回生成
+generate();
+</script>
+
+</body>
+</html>
