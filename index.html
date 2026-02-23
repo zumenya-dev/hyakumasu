@@ -61,6 +61,17 @@ body {
   font-weight: 600;
 }
 .btn-print:hover { background: #ddd !important; }
+.btn-toggle {
+  background: #e8e8e8 !important;
+  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-toggle:hover { background: #ddd !important; }
+.btn-toggle.active {
+  background: #4caf50 !important;
+  color: #fff !important;
+  border-color: #4caf50 !important;
+}
 
 /* ===== Sheet container ===== */
 .sheet-container {
@@ -216,6 +227,10 @@ table.hyaku.expr-mode .header-cell { font-size: 9pt; }
     <button class="btn-generate" onclick="generate()">再生成</button>
     <button class="btn-print" onclick="window.print()">印刷</button>
   </div>
+  <div class="control-row">
+    <label></label>
+    <button id="btn-col-positive" class="btn-toggle" onclick="toggleColPositive()">縦列を正の数のみ</button>
+  </div>
 </div>
 
 <div class="sheet-container">
@@ -227,6 +242,15 @@ table.hyaku.expr-mode .header-cell { font-size: 9pt; }
 /* ===================================================================
    百ます計算ジェネレーター
    =================================================================== */
+
+let colPositiveOnly = false;
+
+function toggleColPositive() {
+  colPositiveOnly = !colPositiveOnly;
+  const btn = document.getElementById('btn-col-positive');
+  btn.classList.toggle('active', colPositiveOnly);
+  generate();
+}
 
 // ----- Term: 文字式の項を表現 -----
 class Term {
@@ -366,6 +390,12 @@ function generateRow(mode, op, isCol) {
   }
 
   if (mode === 'negative') {
+    // 縦列を正の数のみにするオプション
+    if (colPositiveOnly && isCol) {
+      const pool = [];
+      for (let i = 0; i <= 9; i++) pool.push(i);
+      return shuffle(pool).map(n => numTerm(n));
+    }
     // -9〜9から正負バランスよく10個
     const pool = [];
     for (let i = -9; i <= 9; i++) pool.push(i);
@@ -384,6 +414,7 @@ function generateRow(mode, op, isCol) {
 
   if (mode === 'expr') {
     const vars = ['a', 'b'];
+    const positiveOnly = colPositiveOnly && isCol;
     if (op === 'mul' && !isCol) {
       // かけ算の横列（上段）は数値のみ
       const pool = [];
@@ -396,23 +427,27 @@ function generateRow(mode, op, isCol) {
     // 数値項 3〜4個
     const numCount = randInt(3, 4);
     const numPool = [];
-    for (let i = -5; i <= 5; i++) if (i !== 0) numPool.push(i);
+    if (positiveOnly) {
+      for (let i = 1; i <= 5; i++) numPool.push(i);
+    } else {
+      for (let i = -5; i <= 5; i++) if (i !== 0) numPool.push(i);
+    }
     const nums = pickN(numPool, numCount);
     for (const n of nums) items.push(numTerm(n));
 
     // 単項式 3〜4個 (例: 2a, -3b)
     const varTermCount = randInt(3, 4);
     for (let i = 0; i < varTermCount; i++) {
-      const c = randInt(-5, 5) || 1;
+      const c = positiveOnly ? (randInt(1, 5)) : (randInt(-5, 5) || 1);
       const v = vars[Math.floor(Math.random() * vars.length)];
       items.push(varTerm(c, v));
     }
 
     // 残りは多項式 (例: 2a+3, -b+1)
     while (items.length < 10) {
-      const c = randInt(-3, 3) || 1;
+      const c = positiveOnly ? (randInt(1, 3)) : (randInt(-3, 3) || 1);
       const v = vars[Math.floor(Math.random() * vars.length)];
-      const k = randInt(-3, 3) || 1;
+      const k = positiveOnly ? (randInt(1, 3)) : (randInt(-3, 3) || 1);
       items.push(exprTerm(c, v, k));
     }
 
